@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+warehouse.db
+*.db
+airflow.db
+logs/
+.DS_Store
+.vscode/
