@@ -244,6 +244,15 @@ Example configuration is stored in:
 
 Variables:
 
+## Local Services
+
+After starting Docker Compose, the local services are available at:
+
+```text
+ClickHouse HTTP endpoint: http://localhost:8123
+Airflow UI:              http://localhost:8080
+Kafka broker:            localhost:9092
+
 ```env
 CLICKHOUSE_HOST=localhost
 CLICKHOUSE_PORT=8123
