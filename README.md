@@ -73,3 +73,46 @@ docker logs -f etl_airflow
 - Data quality проверки
 - Kafka — потоковая обработка данных
 - Git/GitHub — готово ✅
+
+## Версия 4: Kafka — потоковая обработка в реальном времени
+
+В отличие от версий выше (batch — запускается целиком, раз в день/по требованию),
+здесь данные обрабатываются непрерывным потоком, по мере поступления, с задержкой
+в доли секунды.
+
+### Новые файлы                                                                                                                  В docker-compose.yml добавлен сервис kafka (образ apache/kafka:3.7.0, порт 9092).
+
+### Как запустить
+
+```bash
+cd ~/etl_project
+docker compose up -d
+docker ps
+
+source venv/bin/activate
+pip install kafka-python
+```
+
+Нужны два отдельных окна терминала одновременно:
+
+```bash
+# Вкладка 1
+python3 producer.py
+
+# Вкладка 2
+python3 consumer.py
+```
+
+### Проверить результат
+
+```bash
+docker exec -it etl_clickhouse clickhouse-client --password clickhouse123
+```                                                                                                                               ### Управление Docker-ресурсами
+
+```bash
+docker system df
+docker compose stop
+docker compose start
+docker compose down
+docker compose down -v
+```

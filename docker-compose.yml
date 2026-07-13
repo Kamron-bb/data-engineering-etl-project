@@ -37,6 +37,12 @@ services:
     depends_on:
       - clickhouse
 
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: etl_kafka
+    ports:
+      - "9092:9092"
+
 volumes:
   clickhouse_data:
   airflow_data:
