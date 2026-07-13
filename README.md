@@ -1,119 +1,329 @@
-# ETL Project — мини pipeline (Extract → Transform → Load)
+# Data Engineering ETL Project
 
-Учебный проект: демонстрирует базовый ETL-pipeline на Python.
-Генерирует "сырые" данные о заказах, чистит их через pandas и загружает в SQLite (`warehouse.db`).
+Production-style Data Engineering project that demonstrates batch ETL, ClickHouse analytical warehouse design, medallion architecture, data quality reporting, analytics SQL queries, and automated unit testing.
 
-## Структура проекта 
-## Как запустить (если venv уже создан)
+## Project Overview
 
-Открыть терминал (iTerm) и выполнить три команды:
+This project simulates an end-to-end data pipeline for order data.
 
-```bash
-cd ~/etl_project
-source venv/bin/activate
-python3 pipeline.py
+The pipeline extracts raw order records, loads them into a Bronze layer, cleans and validates them into a Silver layer, and builds business-ready Gold analytics tables in ClickHouse.
+
+It also includes a Data Quality reporting layer that tracks invalid records, duplicates, null values, rejected rows, accepted rows, and an overall data quality score.
+
+## Architecture
+
+```text
+Raw order data
+      ↓
+Bronze layer: raw source records
+      ↓
+Silver layer: cleaned and validated orders
+      ↓
+Gold layer: business-ready revenue metrics
+      ↓
+Analytics SQL queries
+      ↓
+Data Quality report
 ```
 
-Проверка: перед именем пользователя в терминале должно появиться `(venv)` — значит окружение активно.
+## Tech Stack
 
-## Как запустить с нуля (если venv ещё не создан или удалён)
+- Python
+- Pandas
+- ClickHouse
+- Docker / Docker Compose
+- SQL
+- Pytest
+- GitHub Actions CI
+- Kafka / Airflow concepts
+
+## Project Structure
+
+```text
+.
+├── src/
+│   ├── batch/
+│   │   ├── orders_clickhouse_pipeline.py
+│   │   ├── orders_medallion_clickhouse_pipeline.py
+│   │   └── orders_sqlite_pipeline.py
+│   ├── common/
+│   │   └── config.py
+│   ├── transformations/
+│   │   └── orders_transform.py
+│   ├── analytics/
+│   │   └── run_analytics_queries.py
+│   └── streaming/
+│       ├── producer.py
+│       └── consumer.py
+│
+├── sql/
+│   ├── ddl/
+│   │   └── clickhouse_tables.sql
+│   └── analytics/
+│       ├── latest_data_quality_report.sql
+│       ├── raw_data_quality_overview.sql
+│       ├── revenue_by_city.sql
+│       └── revenue_by_day.sql
+│
+├── tests/
+│   └── test_orders_transform.py
+│
+├── dags/
+├── docker-compose.yml
+├── requirements.txt
+├── .env.example
+├── .github/
+│   └── workflows/
+│       └── python-ci.yml
+└── README.md
+```
+
+## Data Warehouse Layers
+
+### Bronze Layer
+
+The Bronze layer stores raw source records with minimal changes.
+
+It is used for:
+
+- auditability
+- debugging
+- replaying pipeline logic
+- reprocessing data
+- investigating data quality issues
+
+Table:
+
+```text
+etl_db.bronze_orders_raw
+```
+
+### Silver Layer
+
+The Silver layer stores cleaned and standardized records.
+
+Cleaning logic includes:
+
+- removing duplicated order IDs
+- removing rows with null amounts
+- removing rows with negative amounts
+- removing rows with empty or missing city values
+- keeping only completed orders
+- adding tax-adjusted amount
+- adding reporting month
+
+Table:
+
+```text
+etl_db.silver_orders_clean
+```
+
+### Gold Layer
+
+The Gold layer stores business-ready aggregated metrics.
+
+Current Gold table:
+
+```text
+etl_db.gold_daily_revenue
+```
+
+Metrics:
+
+- total orders
+- total revenue
+- average order value
+
+## Data Quality
+
+The project includes a dedicated Data Quality report table:
+
+```text
+etl_db.dq_orders_report
+```
+
+It tracks:
+
+- total raw rows
+- duplicate order IDs
+- null amount count
+- negative amount count
+- null city count
+- accepted rows
+- rejected rows
+- data quality score
+
+This makes the pipeline more observable and helps identify data issues before they affect reporting or analytics.
+
+## Analytics SQL Layer
+
+The project includes reusable SQL queries for business and operational analysis.
+
+Available queries:
+
+```text
+sql/analytics/latest_data_quality_report.sql
+sql/analytics/raw_data_quality_overview.sql
+sql/analytics/revenue_by_city.sql
+sql/analytics/revenue_by_day.sql
+```
+
+These queries help answer questions such as:
+
+- What is the daily revenue?
+- Which cities generate the most revenue?
+- How many records were rejected during data cleaning?
+- What is the current data quality score?
+- How many raw records contain null, negative, or invalid values?
+
+## How to Run
+
+### 1. Create and activate virtual environment
 
 ```bash
-cd ~/etl_project
 python3 -m venv venv
 source venv/bin/activate
-pip install pandas
-python3 pipeline.py
 ```
 
-## Версия 2: pipeline_clickhouse.py (настоящая база вместо SQLite)
-
-Та же логика Extract/Transform, но Load теперь пишет в ClickHouse, поднятый
-локально через Docker — как в реальной работе data engineer.
-
-### Как запустить с нуля
+### 2. Install dependencies
 
 ```bash
-cd ~/etl_project
-docker info
+pip install -r requirements.txt
+```
+
+### 3. Start ClickHouse
+
+```bash
 docker compose up -d
-docker ps
-source venv/bin/activate
-pip install clickhouse-connect
-python3 pipeline_clickhouse.py
 ```
 
-### Данные подключения
-
-| Параметр | Значение |
-|---|---|
-| Host | localhost |
-| HTTP порт | 8123 |
-| База | etl_db |
-| Пользователь | default |
-| Пароль | clickhouse123 |
-
-## Версия 3: Airflow — автозапуск по расписанию
-
-Тот же pipeline, но запускается автоматически по расписанию через Airflow.
-
-### Как запустить
+### 4. Run the medallion pipeline
 
 ```bash
-cd ~/etl_project
-docker compose down -v
-docker compose up -d
-docker logs -f etl_airflow
+python -m src.batch.orders_medallion_clickhouse_pipeline
 ```
 
-Открыть веб-интерфейс: http://localhost:8080 (логин admin, пароль создаётся вручную командой airflow users create)
+Expected output:
 
-## Что дальше (идеи для развития проекта)
-
-- dbt — перенести логику transform() из pandas в SQL-модели
-- Data quality проверки
-- Kafka — потоковая обработка данных
-- Git/GitHub — готово ✅
-
-## Версия 4: Kafka — потоковая обработка в реальном времени
-
-В отличие от версий выше (batch — запускается целиком, раз в день/по требованию),
-здесь данные обрабатываются непрерывным потоком, по мере поступления, с задержкой
-в доли секунды.
-
-### Новые файлы                                                                                                                  В docker-compose.yml добавлен сервис kafka (образ apache/kafka:3.7.0, порт 9092).
-
-### Как запустить
-
-```bash
-cd ~/etl_project
-docker compose up -d
-docker ps
-
-source venv/bin/activate
-pip install kafka-python
+```text
+ClickHouse tables are ready.
+Inserted rows into etl_db.bronze_orders_raw.
+Inserted rows into etl_db.silver_orders_clean.
+Inserted rows into etl_db.gold_daily_revenue.
+Inserted rows into etl_db.dq_orders_report.
+Pipeline finished successfully.
 ```
 
-Нужны два отдельных окна терминала одновременно:
+### 5. Run analytics queries
 
 ```bash
-# Вкладка 1
-python3 producer.py
-
-# Вкладка 2
-python3 consumer.py
+python -m src.analytics.run_analytics_queries
 ```
 
-### Проверить результат
+### 6. Run unit tests
 
 ```bash
-docker exec -it etl_clickhouse clickhouse-client --password clickhouse123
-```                                                                                                                               ### Управление Docker-ресурсами
+PYTHONPATH=. pytest -q
+```
+
+Expected output:
+
+```text
+3 passed
+```
+
+## Configuration
+
+The project uses environment variables for configuration.
+
+Example configuration is stored in:
+
+```text
+.env.example
+```
+
+Variables:
+
+```env
+CLICKHOUSE_HOST=localhost
+CLICKHOUSE_PORT=8123
+CLICKHOUSE_DB=etl_db
+CLICKHOUSE_USER=default
+CLICKHOUSE_PASSWORD=clickhouse123
+
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_TOPIC=orders_stream
+```
+
+For local development, create a `.env` file if needed. The `.env` file should not be committed to Git.
+
+## Testing
+
+The transformation logic is tested with Pytest.
+
+Current tests cover:
+
+- duplicate removal
+- null amount filtering
+- negative amount filtering
+- empty city filtering
+- completed order filtering
+- tax calculation
+- month calculation
+- Data Quality metric calculation
+- Gold revenue aggregation
+
+Run tests:
 
 ```bash
-docker system df
-docker compose stop
-docker compose start
-docker compose down
-docker compose down -v
+PYTHONPATH=. pytest -q
+```
+
+## CI/CD
+
+The project includes GitHub Actions CI.
+
+The CI pipeline installs dependencies and runs unit tests automatically on push and pull request.
+
+Workflow file:
+
+```text
+.github/workflows/python-ci.yml
+```
+
+## What This Project Demonstrates
+
+This project demonstrates practical Data Engineering skills:
+
+- end-to-end ETL pipeline development
+- ClickHouse analytical warehouse design
+- Bronze / Silver / Gold medallion architecture
+- data quality and observability concepts
+- SQL analytics layer
+- Python transformation testing
+- Docker-based local data platform
+- CI pipeline with GitHub Actions
+- production-style project structure
+- separation of configuration, transformation, analytics and pipeline logic
+
+## Future Improvements
+
+Planned improvements:
+
+- add Kafka streaming ingestion into the Bronze layer
+- add Airflow DAG for orchestration
+- add dbt models for transformation management
+- add Great Expectations for advanced data validation
+- add dashboard layer using Power BI, Superset, or Metabase
+- add incremental loading and idempotency logic
+- add dead-letter queue for invalid streaming events
+- add structured logging and pipeline run metadata
+- add Makefile for simplified commands
+
+## Portfolio Summary
+
+This project can be described as:
+
+```text
+Built a production-style Data Engineering pipeline using Python, Pandas, ClickHouse, Docker and SQL. Designed a medallion warehouse architecture with Bronze, Silver and Gold layers, implemented data cleaning and validation logic, created Data Quality reporting, added reusable analytics SQL queries, and covered transformation logic with automated unit tests and GitHub Actions CI.
 ```
